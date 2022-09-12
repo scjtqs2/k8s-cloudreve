@@ -1,0 +1,166 @@
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: cloudreve
+  namespace: cloudreve
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      ## 这里填的值，需要和下面的 template.labels.app对应上
+      app: cloudreve
+  template:
+    metadata:
+      labels:
+        ## 这里填写的值，需要和上面 以及 service服务里面的筛选器对应上
+        app: cloudreve
+    spec:
+      volumes:
+        - name: data
+          # 直接将nfs挂载到容器。不经过pvc配置
+          nfs:
+            path: /volume4/cloudreve-data
+            server: 192.168.50.112
+        - name: conf-ini
+          configMap:
+            name: config
+            items:
+              - key: conf.ini
+                path: conf.ini
+        - name: downloads
+          emptyDir: { }
+        - name: license
+          secret:
+            secretName: license
+            items:
+              - key: key.bin
+                path: key.bin
+      containers:
+        - name: cloudreve
+          image: 'scjtqs/cloudreve:pro-3.5.3'
+          ports:
+            - name: http
+              containerPort: 5212
+              protocol: TCP
+          env:
+            - name: TZ
+              value: "Asia/Shanghai"
+          resources:
+            limits:
+              cpu: '1'
+              memory: 1000Mi
+            requests:
+              cpu: 50m
+              memory: 200Mi
+          volumeMounts:
+            - name: conf-ini
+              mountPath: /cloudreve/conf.ini
+              subPath: conf.ini
+            - name: data
+              mountPath: /cloudreve/uploads
+              subPath: uploads
+            - name: data
+              mountPath: /cloudreve/avatar
+              subPath: avatar
+            - name: downloads
+              mountPath: /downloads
+            - name: license
+              mountPath: /cloudreve/key.bin
+              subPath: key.bin
+        - name: aria2
+          image: p3terx/aria2-pro
+          env:
+            - name: TZ
+              value: "Asia/Shanghai"
+            - name: RPC_PORT
+              value: "6800"
+            - name: RPC_SECRET
+              valueFrom:
+                configMapKeyRef:
+                  key: ariar_rpc_secret
+                  name: config
+            - name: IPV6_MODE
+              value: "true"
+            - name: UPDATE_TRACKERS
+              value: "true"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 200Mi
+          volumeMounts:
+            - mountPath: /downloads
+              name: downloads
+            - name: data
+              mountPath: /config
+              subPath: aria2_config
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      #      nodeSelector:
+
+      securityContext: { }
+      schedulerName: default-scheduler
+  strategy:
+    type: Recreate
+  #    rollingUpdate:
+  #      maxUnavailable: 0
+  #      maxSurge: 1
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+
+# redis服务
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: cloudreve-redis
+  namespace: cloudreve
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudreve-redis
+  template:
+    metadata:
+      labels:
+        app: cloudreve-redis
+    spec:
+      containers:
+        - name: redis
+          image: 'redis:6-alpine'
+          env:
+            - name: TZ
+              value: "Asia/Shanghai"
+            - name: REDIS_PASS
+              value: "IamIsRed1ss"            ## redis 密码
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          resources:
+            limits:
+              cpu: 200m
+              memory: 300Mi
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: Always
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+
+### pro版本需要 key.bin这个授权文件。自行添加进去。
+### base64 -w 99999 -i ./key.bin 就能生成对应的base64编码，填入下方对应位置替换掉就行
+---
+kind: Secret
+apiVersion: v1
+type: Opaque
+data:
+  key.bin: >
+    nQTj2lDSa8zuMIcTWzlSHliEBy3w47vRzYl+xu4EDT510EhhulNdnG5M6htIZrjbldO8Hfs60C2IlzE8h3bwRu98vFpQcvonnATtwNhlEjua3DuJr/bdrmN30qOoerW6ts1lY85PgqXX7yQpmw+0MiPJwCinR5kgrByewei0cCw860cvFyhk8hEvZJHq4n/OMZPmSTTmDy+6TfCRzno7ETvJmitPWGkIjRAmUzvzWKFUM/+mVvM3QgedwMcM8Osryr39wkV/Dsucrc28IjXmkLJpmAijtaqwxfqUciA2QO21bfhr8F9h++SYoxgbnCoCzuqCTjliBKfi96hV+3DShzemxlTug4TNdAws8hEAQ43InLa5WIlg0w3+bKFj87X84QMiw0AqnfitsUugZyCAoSZ9QOUyK5WGG9lZvXbb6cpu/thmCG0p3WXb/F2gCZknLxhyIPCdidqNd0C9RMfBn99kt3EecTN/HYW/NekM+14Dhqx/tEBj3n9ySJpx9Wo5RQbS7PMwhdbQA/tvJpeD0JumGd6aKpfsCQF5HekgPtxqAjLCQlq23XxwFZt36VuWk237AGI9bC0SzolzsWrGm5y2gE/bj7Ia+kw8LdLqinwkw4MseYz6XbpMGQONP4Iojai7QV4iVtroQmb5TDVa/v+QT07D+4S6PAPqMBpylRi5V2YUvdxsJ0BZfvB+LDJ9je/ClVQaoM59TTEtoCCtkpFaIXSCDaMcw9pFR3/tZ4YG8eMX/gCPSTQSLzfWJHIhKLPrCsmZYbVzL0GRg9ie6r80iAsga+HuqF6gDa3X1eMwaYh3KJ9sL8HlUoXbYjo2+mLsmaYe1cviNmtB4FjwoVheU14rnBnx4a3JfbHdz4UF88Vyv81h1frreUvS1V+LdXo1xNT/dplMqtcOEZ6EZGXuGquFqSgay9kFLMjoCQEDH0SaN+8Sa+CkyGXgV2EwOTsIy0Vq2PPBpAHt5L3zVllYVF9GrM2FDp8K2jf9opJM+0+mAqXWe9Wj1mWgRLEL0lgJBkTIuJYiiCquX3BA9Wos3VdE4c/BcMr7LO+F2bTUxgFdd0ORTy9cl/XnnwZJrvFe+8mwMIDfj0WVk+4v8Ux8+r7eynhENNg2PzU2tx2KIEg4orMTI3j8/PlgIqBGGSSE16Sl6CGEUkx83z2+Cg3sNQkG5p8C822PfJZfw/eh8icJZYHlcjpdv2AQeq142YELmAqSNhARJk7TfivbQrRPdxrNxiFvVVbEX0kif0+9TWbZytVW3r+Skan9lKzHZGJvBHg5BFYBlP1OzjztxROwPIgY6vR3qwivYEAzyGwBvTUJ8q+I0gEbqRI6cj3c+bhuxEwhGqkE/NzKrkDn72Kt+BonnQwCBnSUxnPcitMEHGHtMQ1/7qswsNrevnNxbsT0LsbwcbV/T+iDtZXs1DhaHl4RXclyTlKKqPnWGrXsnzZqrAocejlfNlMHKkiyFj+tdNtDOJv3mNFw3FvZmL2RGVygyt/HPWsAMQwG50nsZB7dMvZaPNhbGYdlk7XSa61MrVDPy3azhY3NWpbKUFAhIhnJNwF1lBK7FfQfNpkVHeCLiP4UlABD05cu1xjOZ5gNRP2vxr2vfjnLf7r78a2pvbVTLTn9g2vk9GKKEbkRs43n8rVo9zi+TVNwr07FsvS/h2k0p9HVjwghhG/hxFeeUAIX2IVzim96kJqNHO4kn2yfmAy7F1bc6LTAu93NLJcm1CnWfQntknUEDttesRYlKCJcZVaEMHC3i8T6VVh3EnA/CL7eE3ojnltfS6VaU8oizZIucN6Kj9P2o2CrOXEQgn8AdGIFJrzg3Tw2zuJe5//NQRiLjnSx7zoFrYrSThxrrWdqsSlvBX4iWuD52UVU9YRl/IlFfZQ/JDys9iDj8JO18/kdRdZ9+ZqShnVcc9koDZvOZepzb2bT6+CYbEUO0zv3H6+uRhr4FwpwfxrWm95PT5Nfbad/HJuSMnde+U8YdRY50P+TyiNqkNX7hSB7JGPKdUUdg0IHyJPG0lUnCHMxuDDmisG7qYY/Bpcwcv9PPEnXIX57iY0EuF9mVTsHnXei7lTbwZi/dOPnt3z9HiDJkDwCy01GhyHNo8x7cjOjjwQad1EYC9vrXxkoIP/W+W6xZVLl+KEzCEo0VlYOZNhdtTq3ab32GoCmiwZ2XwgNrIrJ3Ubx+Bbzj6QbzCEVb5xzccIUU+H/1gFAcQz8yvrBglRUiloJKH7Clg3vp7ffXhdIHuAEzCm2b84Jy1nKo7Lz+OA0AFbwuFaIN6PT9oEblyqqgplhlUMddZSAAMeQgPacKJQALsSMT+8uPhvOOE5hoMblrROz/cTMwfrU73ZI/Lh13vTTHxu/KRby31GnBkqxEKmXTzHCV0aYFR6+e7DBWaC/oPw3skDeIzJhvOc2d1R44lMccKqjBqJ2Sr2ZZpRtnZ+ITfngOKIbqL5hG61YAd4RzVhtpQkqGaVKs2l+uqUhx8+vUyZaUKFJSv1op6E6665hDBQAQlSVi2vFTgGOuU6fWdEDORc/pbsCaIohfxfzNPhQmOcYioGDg0uuSE5ho5uPGS8/C4gdqlddfYscQ3XUtZCMyAvy8Tkqi+R+Lgb2/tJEG/we+RgONOecOJ2PvDNyan1dgf0cRergXeRc0LXtxZJPLKmOIOTZN3PlBZa1D2GCR2DYhQQZ
+metadata:
+  name: license
+  namespace: cloudreve
