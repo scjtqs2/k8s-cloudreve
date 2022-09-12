@@ -133,7 +133,8 @@ spec:
             - name: TZ
               value: "Asia/Shanghai"
             - name: REDIS_PASS
-              value: "IamIsRed1ss"            ## redis 密码
+              ## redis 密码
+              value: "IamIsRed1ss"           
           ports:
             - name: redis
               containerPort: 6379

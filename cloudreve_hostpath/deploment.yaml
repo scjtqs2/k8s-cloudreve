@@ -134,7 +134,8 @@ spec:
             - name: TZ
               value: "Asia/Shanghai"
             - name: REDIS_PASS
-              value: "IamIsRed1ss"            ## redis 密码
+              ## redis 密码
+              value: "IamIsRed1ss"          
           ## 定义端口名称 可以不定义，service里面直接填端口号就行
           ports:
             - name: redis
