@@ -124,18 +124,17 @@ spec:
       containers:
         - name: redis
           image: 'redis:6-alpine'
-          ## 自定义命令 非必须
+          ## 自定义命令 非必须，这里设置了redis的默认密码
           command:
             - "redis-server"
             - "--appendonly"
             - "yes"
+            - "--requirepass"
+            - "IamIsRed1ss"
           # 环境变量
           env:
             - name: TZ
               value: "Asia/Shanghai"
-            - name: REDIS_PASS
-              ## redis 密码
-              value: "IamIsRed1ss"          
           ## 定义端口名称 可以不定义，service里面直接填端口号就行
           ports:
             - name: redis

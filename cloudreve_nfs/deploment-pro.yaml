@@ -129,12 +129,16 @@ spec:
       containers:
         - name: redis
           image: 'redis:6-alpine'
+          ## 自定义命令 非必须，这里设置了redis的默认密码
+          command:
+            - "redis-server"
+            - "--appendonly"
+            - "yes"
+            - "--requirepass"
+            - "IamIsRed1ss"
           env:
             - name: TZ
-              value: "Asia/Shanghai"
-            - name: REDIS_PASS
-              ## redis 密码
-              value: "IamIsRed1ss"           
+              value: "Asia/Shanghai"        
           ports:
             - name: redis
               containerPort: 6379
