@@ -24,7 +24,7 @@ data:
     TablePrefix = cd_ 
     Charset = utf8mb4 
     [Slave] 
-    Secret = ETlZMcGoilwYa6ZGPBQXXXXXXXXXXXXXXXXXXXXXXXXGTPQBnQtHFUIf9 
+    Secret = 1234567891234567123456789123456712345678912345671234567891234567 
     CallbackTimeout = 20 
     SignatureTTL = 60 
     [CORS] 
